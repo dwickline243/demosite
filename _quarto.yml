@@ -1,0 +1,31 @@
+project:
+  type: website
+  output-dir: docs
+
+website:
+  title: "Home"
+  open-graph: true
+  navbar:
+    background: "#800000"
+    foreground: "#d30000"
+    left:
+      - href: index.qmd
+        text: Home
+      - about.qmd
+      - href: project_draft.qmd
+        text: Project Draft
+      - href: project_code.qmd
+        text: Project Code
+
+format:
+  html:
+    backgroundcolor: "#cd5c5c"
+    fontcolor: "#420d09"
+    theme:
+      - cosmo
+      - brand
+    css: styles.css
+    toc: true
+
+
+

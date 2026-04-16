@@ -1,0 +1,7 @@
+---
+title: "About"
+---
+
+This is a website where my preliminary work with Git and R can be uploaded and where I plan to experiment with website design.
+
+The main purpose of this site is to give me a place to post code and solutions for my final project in MATH 437
