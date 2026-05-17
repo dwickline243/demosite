@@ -1,5 +1,239 @@
 ---
-title: Project Code
+title: "Portfolio Project"
+author: "David Wickline"
+format: pdf
+editor: source
 ---
 
-This is where I plan to put the code chunks for my project. This will be a reference sheet for the final project draft, which I hope I won't need to include any code in. I plan to explain the code in another page
+
+
+## Summary
+
+In this project, I train a knn classification model on public perception data from GPT 3 to see if a public figure's gender sways the public's opinion of them.
+Try as I might, I couldn't come to a satisfying enough conclusion to let my ggplot expertise cpme into play.
+
+## Motivation and Context
+
+I found a data set containing about 250 public figures and the public's opinions on them. This is always an interesting type of data, because the observations are usually recognizable, and it's neat to look at public perceptions of what the world is like.
+
+## Packages Used In This Analysis
+
+```{r}
+#| label: load in the stuff
+
+
+library(tidyverse)
+library(tidymodels)
+library(kknn)
+library(forcats)
+library(discrim)
+library(klaR)
+library(MASS)
+library(e1071)
+
+Ratings <- read_csv("DATA/Average Prolific Ratings with GPT-3 predictions.csv")
+
+
+```
+
+## Data Description
+
+The observations in this dataset are public figures, and the variables are publicly available info about them as well as the average scores given to them by some n people polled. The publicly available variables aren't super interesting and fairly self explanatory.
+
+after that, for each public figure, n people were asked to rank that figure's warmth, competence, and attitude on a scale from -100 to 100, and their extraversion, agreeableness, conscientiousness, neuroticism, and openness on a scale from 1ish to 7ish.
+
+## Data Wrangling/Exploratory Data Analysis
+
+There are also a lot of variables in the original dataset that appear to be from the author's own work on prediction and PCA. I want to rid of those and left myself the more approachable variables I know what are. I also want to remove some of the more redundant and mysterious variables, then arrange it in a way that makes more sense to me.
+
+```{r}
+Ratings_simpler <- Ratings |> dplyr::select("name", "country", "birthyear", "gender", "occupation", "industry", "domain", "n", "warmth", "compt", "attitude", "extra", "agree", "consc", "neuro", "openn") |> mutate(country = as.factor(country), gender = as.factor(gender), occupation = as.factor(occupation), industry = as.factor(industry), domain = as.factor(domain))
+
+set.seed(1415673)
+Ratings_split <- initial_split(Ratings_simpler, prop = 0.8)
+Ratings_train <- training(Ratings_split)
+Ratings_test <- testing(Ratings_split)
+```
+
+
+
+I start by seeing how figures in my training data fare based on gender
+
+```{r}
+mean_data <- Ratings_train |> group_by(gender) |> summarize(sum_n = sum(n), n = n(), warmth = mean(warmth), warmth.na = sum(is.na(warmth)), compt = mean(compt), compt.na = sum(is.na(compt)), attitude = mean(attitude), attitude.na = sum(is.na(attitude)), extra = mean(extra), extra.na = sum(is.na(extra)), agree = mean(agree), agree.na = sum(is.na(agree)), consc = mean(consc), consc.na = sum(is.na(consc)), neuro = mean(neuro), neuro.na = sum(is.na(neuro)), openn = mean(openn), openn.na = sum(is.na(openn)))
+```
+
+This is interesting, I can see which gender has (on average) better scores. I also can see how many responses were catalogued about figures for each gender as well as the number in my training set. I also see that Jennifer Lopez, Margaret Thatcher, and Elvis Presley are missing their gender. This missingness is clearly random, and I can impute the true values based on my domain knowledge.
+
+I wonder, though: how much of the public's opinion of someone is explained just by their gender?
+
+```{r}
+#| label: data imputation
+
+filter(Ratings_train, gender == "Missing")
+
+Ratings_train$gender[which(Ratings_train$gender == "Missing")] = c("Female", "Female", "Male")
+```
+
+This is a question we have the tools to answer; if it is true that gender affects values of the public opinion, then a properly trained classification model would be able to predict gender accurately by looking at the public opinions. The next question is which to use?
+
+Many of the classification models covered in class aren't designed to handle data that isn't normal, so if we can show this assumption is violated, our choices are narrowed down significantly
+
+```{r}
+#| label: checks for normality in relevant data
+
+ggplot(data = Ratings_simpler) +
+  geom_histogram(mapping = aes(x = (warmth - mean(warmth))/sd(warmth)), binwidth = 1/4, center = 0) +
+  labs(y = "Count", x = "Z score")
+```
+
+
+```{r}
+ggplot(data = Ratings_simpler) +
+  geom_histogram(mapping = aes(x = (compt - mean(compt))/sd(compt)), binwidth = 1/2, center = 0) +
+  labs(y = "Count", x = "Z score")
+```
+
+```{r}
+ggplot(data = Ratings_simpler) +
+  geom_histogram(mapping = aes(x = (attitude - mean(attitude))/sd(attitude)), binwidth = 1/2, center = 0) +
+  labs(y = "Count", x = "Z score")
+```
+
+```{r}
+ggplot(data = Ratings_simpler) +
+  geom_histogram(mapping = aes(x = (extra - mean(extra))/sd(extra)), binwidth = 1/2, center = 0) +
+  labs(y = "Count", x = "Z score")
+```
+
+```{r}
+ggplot(data = Ratings_simpler) +
+  geom_histogram(mapping = aes(x = (agree - mean(agree))/sd(agree)), binwidth = 1/2, center = 0) +
+  labs(y = "Count", x = "Z score")
+```
+
+```{r}
+ggplot(data = Ratings_simpler) +
+  geom_histogram(mapping = aes(x = (consc - mean(consc))/sd(consc)), binwidth = 1/2, center = 0) +
+  labs(y = "Count", x = "Z score")
+```
+
+```{r}
+ggplot(data = Ratings_simpler) +
+  geom_histogram(mapping = aes(x = (neuro - mean(neuro))/sd(neuro)), binwidth = 1/4, center = 0) +
+  labs(y = "Count", x = "Z score")
+```
+
+```{r}
+ggplot(data = Ratings_simpler) +
+  geom_histogram(mapping = aes(x = (openn - mean(openn))/sd(openn)), binwidth = 1/2, center = 0) +
+  labs(y = "Count", x = "Z score")
+```
+
+
+Almost all of our variables are skewed (most of them are left skewed, with the exception of neuroticism; this is within expectations, as people who would score low on most of these traits don't tend to become public figures).
+
+This skew in our opinion variables requires us to pick a classification model that can handle variables that aren't normal.
+
+## Modeling
+
+Naive Bayes is a good contender for this, assuming our variables are independent, but k nearest neighbors can do this without that assumption. I'll use knn.
+
+
+```{r}
+#| label: Nearest Neighbors
+
+Ratings_knn_model_tune <- nearest_neighbor(neighbors = tune(), dist_power = 2) |>
+  set_mode("classification") |>
+  set_engine("kknn")
+
+Ratings_knn_recipe <- recipe(
+  gender ~ warmth + compt + attitude + extra + agree + consc + neuro + openn,
+  data = Ratings_train
+) |>
+  step_normalize(all_numeric_predictors())
+
+Ratings_knn_wflow_tune <- workflow() |>
+  add_model(Ratings_knn_model_tune) |>
+  add_recipe(Ratings_knn_recipe)
+```
+
+K nearest Neighbors predicts the value of the response variable to be the average values of the observations from the training set that are closest to it. How many neighbors are used and how distance is defined can vary, but what results is a versatile non-parametric approach to modelling.
+
+```{r}
+#| label: tuna piano tuna fish
+
+set.seed(47628593)
+Ratings_vfold <- vfold_cv(
+  v = 7,
+  data = Ratings_train
+)
+
+param.grid <- data.frame(
+  neighbors = seq(from = 5, to = 145, by = 10)
+)
+
+Ratings_knn_tune <- Ratings_knn_wflow_tune |> 
+  tune_grid(
+    resamples = Ratings_vfold,
+    grid = param.grid,
+    metrics = metric_set(mn_log_loss, roc_auc)
+  )
+```
+
+
+```{r}
+#| label: Find the better neighbors
+
+autoplot(Ratings_knn_tune)
+```
+Both of our metrics seem to cap out at 25 neighbors, so I want to fit my model with about that many neighbors
+
+```{r}
+#| label: finalize knn
+
+Ratings_knn_model_final <- nearest_neighbor(
+  neighbors = 25,
+  dist_power =2
+) |>
+  set_mode("classification")
+
+Ratings_knn_wflow_final <- workflow() |>
+  add_model(Ratings_knn_model_final) |>
+  add_recipe(Ratings_knn_recipe)
+```
+
+```{r}
+#| label: fit knn
+
+Ratings_knn_fit <- Ratings_knn_wflow_final |>
+  fit(data = Ratings_train)
+Ratings_knn_fit
+```
+
+```{r}
+#| label: predict knn
+
+Ratings_knn_predictions <- Ratings_knn_fit |>
+  augment(new_data = Ratings_test |> filter(gender != "Missing"))
+```
+
+
+## Insights
+
+```{r}
+Ratings_knn_predictions |>
+  conf_mat(
+    truth = gender,
+    estimate = .pred_class
+  )
+```
+
+
+ 
+
+## Limitations and Future Work
+
+The public figures in this data set are overwhelmingly male, which confounded most of the work a classification algorithm could do. In the end I ended up with a model that had the same accuracy level as the null classifier. I could have operated under the misguided assumption of normality and performed a more normal test, but that didn't sit well with me. In the future, I would like to see similar data collected on a larger scale to contain more public figures.
+
+I 

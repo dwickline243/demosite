@@ -2,7 +2,7 @@
 title: "David Wickline"
 subtitle: "Actuary and Data Analyst"
 # throw in pictures if you want
-image: profile.1.jpeg
+image: profile.2.jpg
 about: #https://quarto.org/docs/websites/website-about
   template: trestles
   links: 
