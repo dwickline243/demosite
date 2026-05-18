@@ -1,7 +1,7 @@
 ---
 title: "Portfolio Project"
 author: "David Wickline"
-format: pdf
+format: html
 editor: source
 ---
 
