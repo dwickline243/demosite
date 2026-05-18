@@ -15,7 +15,7 @@ website:
       - href: project_draft.qmd
         text: Project Draft
       - href: project_code.qmd
-        text: Project Code
+        text: Portfolio Project
 
 format:
   html:
